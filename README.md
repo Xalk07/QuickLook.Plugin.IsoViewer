@@ -1,4 +1,4 @@
-# QuickLook.Plugin.IsoViewer 
+# QuickLook.Plugin.IsoViewer [![GitHub all releases](https://img.shields.io/github/downloads/xalk07/QuickLook.Plugin.IsoViewer/total)](https://github.com/xalk07/QuickLook.Plugin.IsoViewer/releases)
 Plugin for [QuickLook](https://github.com/QL-Win/QuickLook), allowing to preview `.iso` file. PSP Game/Video/Audio UMD metadata + file tree; other ISOs show file tree.
 
 This plugin combines [QuickLook.Plugin.PbpViewer](https://github.com/Xalk07/QuickLook.Plugin.PbpViewer) and [QuickLook.Plugin.FolderViewer](https://github.com/adyanth/QuickLook.Plugin.FolderViewer) adapted for ISO support.

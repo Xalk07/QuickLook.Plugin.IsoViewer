@@ -13,11 +13,16 @@ namespace QuickLook.Plugin.IsoViewer
     public partial class ViewerPane : UserControl, INotifyPropertyChanged
     {
         private const string SETTING_THEME_ID = "Theme";
+        private const string SETTING_BG_ID = "BackgroundMode"; // 0=none, 1=pic1, 2=pmf
 
         private IsoGameInfo _info;
         private ContextObject _context;
         private At3Player _player;
         private PmfPlayer _pmfPlayer;
+        private bool _bgPic1Enabled;
+        private bool _bgPmfEnabled;
+        private PmfPlayer _bgPmfPlayer;
+
 
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -50,6 +55,10 @@ namespace QuickLook.Plugin.IsoViewer
             InitializeComponent();
             btnSwTheme.MouseLeftButtonDown += SwitchTheme;
             btnPlaySnd0.MouseLeftButtonDown += ToggleSnd0;
+
+            btnBgPic1.MouseLeftButtonDown += ToggleBgPic1;
+            btnBgPmf.MouseLeftButtonDown += ToggleBgPmf;
+
             Unloaded += OnUnloaded;
         }
 
@@ -102,6 +111,99 @@ namespace QuickLook.Plugin.IsoViewer
                 ? "Stop SND0"
                 : "Play SND0 (loop)";
         }
+        private void ToggleBgPic1(object sender, MouseButtonEventArgs e)
+        {
+            _bgPic1Enabled = !_bgPic1Enabled;
+            _bgPmfEnabled = false;
+            StopBgVideo();
+            ApplyBackground();
+            UpdateBgButtons();
+
+            SettingHelper.Set(SETTING_BG_ID, _bgPic1Enabled ? 1 : 0, GetType().Namespace);
+        }
+
+        private void ToggleBgPmf(object sender, MouseButtonEventArgs e)
+        {
+            _bgPmfEnabled = !_bgPmfEnabled;
+            _bgPic1Enabled = false;
+
+            if (_bgPmfEnabled)
+                StartBgVideo();
+            else
+                StopBgVideo();
+
+            ApplyBackground();
+            UpdateBgButtons();
+
+            SettingHelper.Set(SETTING_BG_ID, _bgPmfEnabled ? 2 : 0, GetType().Namespace);
+        }
+
+        private void ApplyBackground()
+        {
+            if (_bgPic1Enabled && _info?.Pic1 != null)
+            {
+                bgImage.Source = _info.Pic1;
+                bgImage.Visibility = Visibility.Visible;
+                bgVideo.Visibility = Visibility.Collapsed;
+            }
+            else if (_bgPmfEnabled)
+            {
+                bgImage.Visibility = Visibility.Collapsed;
+                bgVideo.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                bgImage.Visibility = Visibility.Collapsed;
+                bgVideo.Visibility = Visibility.Collapsed;
+                bgImage.Source = null;
+                bgVideo.Source = null;
+            }
+        }
+
+        private void UpdateBgButtons()
+        {
+            if (btnBgPic1 != null)
+            {
+                btnBgPic1.Source = new BitmapImage(new Uri(
+                    _bgPic1Enabled ? "images/bg_pic_on.png" : "images/bg_pic_off.png",
+                    UriKind.Relative));
+                btnBgPic1.ToolTip = _bgPic1Enabled ? "Disable PIC1 background" : "Enable PIC1 background";
+            }
+
+            if (btnBgPmf != null)
+            {
+                btnBgPmf.Source = new BitmapImage(new Uri(
+                    _bgPmfEnabled ? "images/bg_pmf_on.png" : "images/bg_pmf_off.png",
+                    UriKind.Relative));
+                btnBgPmf.ToolTip = _bgPmfEnabled ? "Disable PMF background" : "Enable PMF background";
+            }
+        }
+
+        private void StartBgVideo()
+        {
+            StopBgVideo();
+
+            if (_info?.Icon1Data == null || _info.Icon1Data.Length <= 2048)
+                return;
+
+            _bgPmfPlayer = new PmfPlayer();
+            _bgPmfPlayer.SetData(_info.Icon1Data);
+
+            _bgPmfPlayer.FrameUpdated += () =>
+            {
+                bgVideo.Source = _bgPmfPlayer.CurrentFrame;
+            };
+
+            _bgPmfPlayer.Start(Dispatcher);
+        }
+
+        private void StopBgVideo()
+        {
+            _bgPmfPlayer?.Dispose();
+            _bgPmfPlayer = null;
+            if (bgVideo != null)
+                bgVideo.Source = null;
+        }
 
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
@@ -110,6 +212,9 @@ namespace QuickLook.Plugin.IsoViewer
 
             _pmfPlayer?.Dispose();
             _pmfPlayer = null;
+
+            _bgPmfPlayer?.Dispose();
+            _bgPmfPlayer = null;
         }
 
         private void AfterThemeChanged(object sender, PropertyChangedEventArgs e)
@@ -214,6 +319,37 @@ namespace QuickLook.Plugin.IsoViewer
                 panelIcon1.Visibility = Visibility.Visible;
                 _pmfPlayer.Start(Dispatcher);
             }
+            // Показывать кнопки
+            btnBgPic1.Visibility = _info.Pic1 != null ? Visibility.Visible : Visibility.Collapsed;
+            btnBgPmf.Visibility = (_info.Icon1Data != null && _info.Icon1Data.Length > 2048)
+                                  ? Visibility.Visible : Visibility.Collapsed;
+
+            // Восстановление фона из настроек
+            int savedMode = SettingHelper.Get(SETTING_BG_ID, 0, GetType().Namespace);
+
+            bool hasPic1 = _info.Pic1 != null;
+            bool hasPmf = _info.Icon1Data != null && _info.Icon1Data.Length > 2048;
+
+            _bgPic1Enabled = false;
+            _bgPmfEnabled = false;
+            StopBgVideo();
+
+            if (savedMode == 2 && hasPmf)
+            {
+                _bgPmfEnabled = true;
+                StartBgVideo();
+            }
+            else if (savedMode == 1 && hasPic1)
+            {
+                _bgPic1Enabled = true;
+            }
+            else if (savedMode == 2 && hasPic1)   // хотел видео, но его нет → картинка
+            {
+                _bgPic1Enabled = true;
+            }
+
+            ApplyBackground();
+            UpdateBgButtons();
         }
 
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
